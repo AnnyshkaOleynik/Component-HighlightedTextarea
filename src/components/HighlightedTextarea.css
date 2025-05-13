@@ -1,0 +1,63 @@
+.highlighted-textarea-container {
+    position: relative;
+    width: 100%;
+  }
+  
+  .textarea {
+    width: 100%;
+    background: transparent;
+    position: relative;
+    color: transparent;
+    caret-color: black; 
+    font-family: monospace;
+    font-size: 14px;
+    padding: 4px 11px;
+    white-space: pre-wrap;
+  }
+
+  .textarea::selection {
+    color: transparent; 
+    background-color: rgb(109, 170, 255); 
+  }
+  
+  .highlight-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    font-family: monospace;
+    font-size: 14px;
+    line-height: 1.5714285714285714;
+    padding: 4px 11px;
+    box-sizing: border-box;
+    text-align: start;
+    overflow-wrap: break-word;
+    white-space: pre-wrap;
+    color: #333;
+    background: transparent;
+    border: 1px solid transparent;
+  
+    .logical-operator {
+      color: #d62525; 
+    }
+  
+    .key {
+      color: #0066fe; 
+    }
+  
+    .quoted-value {
+      color: #7a45f6; 
+    }  
+  }
+  
+  .textarea.error {
+    border-color: #ff4d4f;
+  }
+  
+  .error-message {
+    color: #ff4d4f;
+    margin-top: 8px;
+    font-size: 14px;
+  } 
