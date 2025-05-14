@@ -121,11 +121,9 @@ const HighlightedTextarea = ({ value = '' }) => {
     };
 
     const parseExpression = (): void => {
-      let hasBlock = false;
       
       while (i < len) {
         parseBlock();
-        hasBlock = true;
         
         skipWhitespace();
         if (i >= len) break;
