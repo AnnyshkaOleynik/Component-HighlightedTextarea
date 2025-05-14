@@ -4,267 +4,218 @@ import './HighlightedTextarea.css';
 
 const { TextArea } = Input;
 
-interface HighlightedTextareaProps {
-  value?: string;
-  onChange?: (value: string) => void;
+class ValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ValidationError';
+  }
 }
 
-const HighlightedTextarea: React.FC<HighlightedTextareaProps> = ({ value = '', onChange }) => {
+const HighlightedTextarea = ({ value = '' }) => {
   const [inputValue, setInputValue] = useState(value);
-  const [isValid, setIsValid] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     setInputValue(value);
-    setIsValid(true);
+    setErrorMessage('');
   }, [value]);
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputValue(e.target.value);
-    onChange?.(e.target.value);
-    setIsValid(true);
+    setErrorMessage('');
   };
 
-  const validateExpression = (text: string): boolean => {
-    try {
-      let i = 0;
-      const len = text.length;
-      let parenDepth = 0;
-      let hasType1 = false;
-      let hasType2 = false;
-      let lastTokenWasOperator = false;
-      let lastTokenWasBlock = false;
-  
-      const skipWhitespace = () => {
-        while (i < len && /\s/.test(text[i])) i++;
-      };
-  
-      const parseValue = (): boolean => {
-        if (i >= len) return false;
-        
-        const quoteChars = ['"', "'", "“", "”"];
-        if (quoteChars.includes(text[i])) {
-          const quoteChar = text[i];
-          i++;
-          let escaped = false;
-          
-          while (i < len) {
-            if (escaped) {
-              escaped = false;
-            } else if (text[i] === '\\') {
-              escaped = true;
-            } else if (text[i] === quoteChar || 
-                      (quoteChar === "“" && text[i] === "”") || 
-                      (quoteChar === "”" && text[i] === "“")) {
-              i++;
-              return true;
-            }
-            i++;
-          }
-          return false;
-        }
-        
-        while (i < len && !/\s/.test(text[i]) && ![')', '=', '(', '\\'].includes(text[i])) {
-          i++;
-        }
-        return true;
-      };
-  
-      const parseKeyValue = (): boolean => {
-        const keyStart = i;
-        while (i < len && /[A-Za-z]/.test(text[i])) i++;
-        if (i === keyStart) return false;
-        
-        skipWhitespace();
-        if (text[i] !== '=') return false;
+  const validateExpression = (text: string): void => {
+    let i = 0;
+    const len = text.length;
+    let parenDepth = 0;
+    let hasType1 = false;
+    let hasType2 = false;
+    let lastTokenWasOperator = false;
+    let lastTokenWasBlock = false;
+
+    const skipWhitespace = () => {
+      while (i < len && /\s/.test(text[i])) i++;
+    };
+
+    const parseValue = (): void => {
+      if (i >= len) throw new ValidationError('Ожидается значение после оператора');
+      
+      const quoteChars = ['"', "'", "“", "”"];
+      if (quoteChars.includes(text[i])) {
+        const quoteChar = text[i];
         i++;
-        skipWhitespace();
-        
-        return parseValue();
-      };
-  
-      const parseBlock = (): boolean => {
-        skipWhitespace();
-        if (i >= len) return false;
-  
-        if (text.slice(i, i + 3).toUpperCase() === 'NOT') {
-          i += 3;
-          skipWhitespace();
-          lastTokenWasOperator = false;
-        }
-  
-        if (text[i] === '(') {
-          i++;
-          parenDepth++;
-          skipWhitespace();
-          if (!parseExpression()) return false;
-          skipWhitespace();
-          if (text[i] !== ')') return false;
-          i++;
-          parenDepth--;
-          lastTokenWasOperator = false;
-          lastTokenWasBlock = true;
-          return true;
-        }
-  
-        if (/^[A-Za-z]{2,}\s*=/.test(text.slice(i))) {
-          if (hasType1) return false;
-          hasType2 = true;
-          lastTokenWasOperator = false;
-          const result = parseKeyValue();
-          lastTokenWasBlock = result;
-          return result;
-        } else {
-          if (hasType2) return false;
-          hasType1 = true;
-          lastTokenWasOperator = false;
-          const result = parseValue();
-          lastTokenWasBlock = result;
-          return result;
-        }
-      };
-  
-      const parseExpression = (): boolean => {
-        let hasBlock = false;
+        let escaped = false;
         
         while (i < len) {
-          if (!parseBlock()) return false;
-          hasBlock = true;
-          
-          skipWhitespace();
-          if (i >= len) break;
-          
-          if (lastTokenWasBlock) {
-            const nextPart = text.slice(i).trim().split(/\s+|(?=[()])/)[0].toUpperCase();
-
-            if (![')', '(', 'AND', 'OR'].includes(nextPart)) {
-                const nextChar = text[i];
-                if (/[A-Za-z"']/.test(nextChar)) {
-                    return false; 
-                }
-            }
+          if (escaped) {
+            escaped = false;
+          } else if (text[i] === '\\') {
+            escaped = true;
+          } else if (text[i] === quoteChar || 
+                    (quoteChar === "“" && text[i] === "”") || 
+                    (quoteChar === "”" && text[i] === "“")) {
+            i++;
+            return;
           }
-  
-          const upper = text.slice(i).toUpperCase();
-          if (upper.startsWith('AND') || upper.startsWith('OR')) {
-            if (lastTokenWasOperator) return false; 
-            
-            const opLength = upper.startsWith('AND') ? 3 : 2;
-            i += opLength;
-            skipWhitespace();
-            lastTokenWasOperator = true;
-            lastTokenWasBlock = false;
-            
-            if (i >= len) return false;
-          } else if (text[i] === ')') {
-            break;
-          } else if (parenDepth === 0) {
-            break;
+          i++;
+        }
+        throw new ValidationError('Незакрытая кавычка');
+      }
+      
+      while (i < len && !/\s/.test(text[i]) && ![')', '=', '(', '\\'].includes(text[i])) {
+        i++;
+      }
+    };
+
+    const parseKeyValue = (): void => {
+      const keyStart = i;
+      while (i < len && /[A-Za-z]/.test(text[i])) i++;
+      if (i === keyStart) throw new ValidationError('Ожидается ключ перед оператором =');
+      
+      skipWhitespace();
+      if (text[i] !== '=') throw new ValidationError('Ожидается оператор = после ключа');
+      i++;
+      skipWhitespace();
+      
+      parseValue();
+    };
+
+    const parseBlock = (): void => {
+      skipWhitespace();
+      if (i >= len) throw new ValidationError('Неожиданный конец выражения');
+
+      if (text.slice(i, i + 3).toUpperCase() === 'NOT') {
+        i += 3;
+        skipWhitespace();
+        lastTokenWasOperator = false;
+      }
+
+      if (text[i] === '(') {
+        i++;
+        parenDepth++;
+        skipWhitespace();
+        parseExpression();
+        skipWhitespace();
+        if (text[i] !== ')') throw new ValidationError('Отсутствует закрывающая скобка');
+        i++;
+        parenDepth--;
+        lastTokenWasOperator = false;
+        lastTokenWasBlock = true;
+        return;
+      }
+
+      if (/^[A-Za-z]{2,}\s*=/.test(text.slice(i))) {
+        if (hasType1) throw new ValidationError('Смешение типов логических выражений');
+        hasType2 = true;
+        lastTokenWasOperator = false;
+        parseKeyValue();
+        lastTokenWasBlock = true;
+      } else {
+        if (hasType2) throw new ValidationError('Смешение типов логических выражений');
+        hasType1 = true;
+        lastTokenWasOperator = false;
+        parseValue();
+        lastTokenWasBlock = true;
+      }
+    };
+
+    const parseExpression = (): void => {
+      let hasBlock = false;
+      
+      while (i < len) {
+        parseBlock();
+        hasBlock = true;
+        
+        skipWhitespace();
+        if (i >= len) break;
+        
+        if (lastTokenWasBlock) {
+          const nextPart = text.slice(i).trim().split(/\s+|(?=[()])/)[0].toUpperCase();
+          if (![')', '(', 'AND', 'OR'].includes(nextPart) && /[A-Za-z"']/.test(text[i])) {
+            throw new ValidationError('Отсутствует логическая связка');
           }
         }
-        
-        if (lastTokenWasOperator) return false;
-        
-        return hasBlock;
-      };
-  
+
+        const upper = text.slice(i).toUpperCase();
+        if (upper.startsWith('AND') || upper.startsWith('OR')) {
+          if (lastTokenWasOperator) throw new ValidationError('Повторяющаяся логическая связка');
+          
+          const opLength = upper.startsWith('AND') ? 3 : 2;
+          i += opLength;
+          skipWhitespace();
+          lastTokenWasOperator = true;
+          lastTokenWasBlock = false;
+          
+          if (i >= len) throw new ValidationError('Выражение после связки отсутствует');
+        } else if (text[i] === ')') {
+          break;
+        } else if (parenDepth === 0) {
+          break;
+        }
+      }
+      
+      if (lastTokenWasOperator) throw new ValidationError('Выражение после связки отсутствует');
+    };
+
+    try {
       skipWhitespace();
-      if (!parseExpression()) return false;
+      parseExpression();
       skipWhitespace();
-      return i === len && parenDepth === 0;
-    } catch {
-      return false;
+      
+      if (i !== len) throw new ValidationError('Неожиданные символы в конце');
+      if (parenDepth !== 0) throw new ValidationError('Неверное количество скобок');
+    } catch (error) {
+      if (error instanceof ValidationError) throw error;
+      throw new ValidationError('Некорректное выражение');
     }
   };
 
   const highlightedText = useMemo(() => {
     try {
-      const isValidExpression = validateExpression(inputValue);
-      setIsValid(isValidExpression);
-
-      if (!isValidExpression) {
-        return [<span key="0">{inputValue}</span>];
-      }
-
+      validateExpression(inputValue);
+      setErrorMessage('');
+      
       const tokens = [];
       let i = 0;
       const len = inputValue.length;
 
       while (i < len) {
-        if (/\s/.test(inputValue[i])) {
-          tokens.push(<span key={i}>{inputValue[i]}</span>);
-          i++;
-          continue;
-        }
+      if (/\s/.test(inputValue[i])) {
+        tokens.push(<span key={i}>{inputValue[i]}</span>);
+        i++;
+        continue;
+      }
 
-        if (inputValue.slice(i, i + 3).toUpperCase() === 'AND') {
-          tokens.push(<span key={i} className="logical-operator">AND</span>);
-          i += 3;
-          continue;
-        }
-        if (inputValue.slice(i, i + 2).toUpperCase() === 'OR') {
-          tokens.push(<span key={i} className="logical-operator">OR</span>);
-          i += 2;
-          continue;
-        }
-        if (inputValue.slice(i, i + 3).toUpperCase() === 'NOT') {
-          tokens.push(<span key={i} className="logical-operator">NOT</span>);
-          i += 3;
-          continue;
-        }
+      if (inputValue.slice(i, i + 3).toUpperCase() === 'AND') {
+        tokens.push(<span key={i} className="logical-operator">AND</span>);
+        i += 3;
+        continue;
+      }
+      if (inputValue.slice(i, i + 2).toUpperCase() === 'OR') {
+        tokens.push(<span key={i} className="logical-operator">OR</span>);
+        i += 2;
+        continue;
+      }
+      if (inputValue.slice(i, i + 3).toUpperCase() === 'NOT') {
+        tokens.push(<span key={i} className="logical-operator">NOT</span>);
+        i += 3;
+        continue;
+      }
 
-        if (inputValue[i] === '(' || inputValue[i] === ')') {
-          tokens.push(<span key={i}>{inputValue[i]}</span>);
-          i++;
-          continue;
-        }
+      if (inputValue[i] === '(' || inputValue[i] === ')') {
+        tokens.push(<span key={i}>{inputValue[i]}</span>);
+        i++;
+        continue;
+      }
 
-        if (/^[A-Za-z]{2,}\s*=/.test(inputValue.slice(i))) {
-          const keyEnd = inputValue.indexOf('=', i);
-          const key = inputValue.slice(i, keyEnd);
-          
-          tokens.push(<span key={i} className="key">{key}</span>);
-          tokens.push(<span key={`${i}-eq`}>=</span>);
-          i = keyEnd + 1;
-
-          const quoteChars = ['"', "'", "“", "”"];
-          if (quoteChars.includes(inputValue[i])) {
-            const quoteChar = inputValue[i];
-            let valueStart = i;
-            let valueEnd = -1;
-            let j = i + 1;
-            let escaped = false;
-            
-            while (j < len) {
-              if (escaped) {
-                escaped = false;
-              } else if (inputValue[j] === '\\') {
-                escaped = true;
-              } else if (inputValue[j] === quoteChar || 
-                        (quoteChar === "“" && inputValue[j] === "”") || 
-                        (quoteChar === "”" && inputValue[j] === "“")) {
-                valueEnd = j;
-                break;
-              }
-              j++;
-            }
-            
-            if (valueEnd > 0) {
-              const valueContent = inputValue.slice(valueStart, valueEnd + 1);
-              tokens.push(<span key={valueStart} className="quoted-value">{valueContent}</span>);
-              i = valueEnd + 1;
-            } else {
-              tokens.push(<span key={i}>{inputValue[i]}</span>);
-              i++;
-            }
-          } else {
-            while (i < len && !/\s/.test(inputValue[i]) && 
-                  ![')', '=', '(', '\\'].includes(inputValue[i])) {
-              tokens.push(<span key={i}>{inputValue[i]}</span>);
-              i++;
-            }
-          }
-          continue;
-        }
+      if (/^[A-Za-z]{2,}\s*=/.test(inputValue.slice(i))) {
+        const keyEnd = inputValue.indexOf('=', i);
+        const key = inputValue.slice(i, keyEnd);
+        
+        tokens.push(<span key={i} className="key">{key}</span>);
+        tokens.push(<span key={`${i}-eq`}>=</span>);
+        i = keyEnd + 1;
 
         const quoteChars = ['"', "'", "“", "”"];
         if (quoteChars.includes(inputValue[i])) {
@@ -296,16 +247,61 @@ const HighlightedTextarea: React.FC<HighlightedTextareaProps> = ({ value = '', o
             tokens.push(<span key={i}>{inputValue[i]}</span>);
             i++;
           }
-          continue;
+        } else {
+          while (i < len && !/\s/.test(inputValue[i]) && 
+                ![')', '=', '(', '\\'].includes(inputValue[i])) {
+            tokens.push(<span key={i}>{inputValue[i]}</span>);
+            i++;
+          }
         }
-
-        tokens.push(<span key={i}>{inputValue[i]}</span>);
-        i++;
+        continue;
       }
 
+      const quoteChars = ['"', "'", "“", "”"];
+      if (quoteChars.includes(inputValue[i])) {
+        const quoteChar = inputValue[i];
+        let valueStart = i;
+        let valueEnd = -1;
+        let j = i + 1;
+        let escaped = false;
+        
+        while (j < len) {
+          if (escaped) {
+            escaped = false;
+          } else if (inputValue[j] === '\\') {
+            escaped = true;
+          } else if (inputValue[j] === quoteChar || 
+                    (quoteChar === "“" && inputValue[j] === "”") || 
+                    (quoteChar === "”" && inputValue[j] === "“")) {
+            valueEnd = j;
+            break;
+          }
+          j++;
+        }
+        
+        if (valueEnd > 0) {
+          const valueContent = inputValue.slice(valueStart, valueEnd + 1);
+          tokens.push(<span key={valueStart} className="quoted-value">{valueContent}</span>);
+          i = valueEnd + 1;
+        } else {
+          tokens.push(<span key={i}>{inputValue[i]}</span>);
+          i++;
+        }
+        continue;
+      }
+
+      tokens.push(<span key={i}>{inputValue[i]}</span>);
+      i++;
+    }
+
       return tokens;
-    } catch {
-      setIsValid(false);
+    } catch (error) {            
+      let message = 'Неизвестная ошибка';
+      if (typeof error === 'object' && error !== null && 'message' in error) {
+        message = (error as Error).message;
+      }
+      
+      setErrorMessage(message);
       return [<span key="0">{inputValue}</span>];
     }
   }, [inputValue]);
@@ -316,14 +312,14 @@ const HighlightedTextarea: React.FC<HighlightedTextareaProps> = ({ value = '', o
         value={inputValue}
         onChange={handleChange}
         autoSize={{ minRows: 3 }}
-        className={`textarea ${!isValid ? 'error' : ''}`}
+        className={`textarea ${errorMessage !== '' ? 'error' : ''}`}
         placeholder="Пример: (TI=”Kaspersky” OR AB=”Avast”) AND NOT (DP=”2021-21-17”)"
       />
-      <div className={`highlight-overlay ${!isValid ? 'hidden' : ''}`}>
+      <div className={`highlight-overlay ${errorMessage !== '' ? 'hidden' : ''}`}>
         {highlightedText}
       </div>
-      {!isValid && (
-        <div className="error-message">Некорректное логическое выражение</div>
+      {errorMessage !== '' && (
+        <div className="error-message">{errorMessage}</div>
       )}
     </div>
   );
