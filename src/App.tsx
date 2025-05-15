@@ -1,7 +1,7 @@
 import './App.css'
 import HighlightedTextarea from './components/HighlightedTextarea'
 
-function App() {
+const App = () => {
   return (
     <>
       <h1>Введите поисковое логическое выражение</h1>   
